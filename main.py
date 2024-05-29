@@ -3,7 +3,7 @@ import config
 import time
 import network
 import ubinascii
-from machine import Pin, SoftI2C, unique_id
+from machine import Pin, SoftI2C, unique_id, reset
 from struct import unpack, unpack_from
 from umqtt.simple import MQTTClient
 
@@ -61,9 +61,11 @@ def main():
         raw_lux = (read_buffer[0] << 8 | read_buffer[1])
         lux = round(raw_lux / 1.2, 1)
 
-        client.publish(f"{TOPIC_TEAM_PREFIX}/BH1750/illumination", str(lux), qos=1)
-
-        print(f"BH1750: Illuminance: {lux} lx")
+        try:
+            client.publish(f"{TOPIC_TEAM_PREFIX}/BH1750/illumination", str(lux), qos=1)
+            print(f"BH1750: Illuminance: {lux} lx")
+        except OSError:
+            reset()
 
         if scd41_get_data_ready_status():
             raw_measurement = scd41_read_measurement()
@@ -76,15 +78,19 @@ def main():
                 raw_humidity = (raw_measurement[6] << 8) | raw_measurement[7]
                 humidity = round(100 * (raw_humidity / (2 ** 16 - 1)), 1)
 
-                client.publish(f"{TOPIC_TEAM_PREFIX}/SCD41/co2", str(co2), qos=1)
-                client.publish(f"{TOPIC_TEAM_PREFIX}/SCD41/humidity", str(humidity), qos=1)
-                client.publish(f"{TOPIC_TEAM_PREFIX}/SCD41/temperature", str(temperature), qos=1)
+                try:
+                    client.publish(f"{TOPIC_TEAM_PREFIX}/SCD41/co2", str(co2), qos=1)
+                    client.publish(f"{TOPIC_TEAM_PREFIX}/SCD41/humidity", str(humidity), qos=1)
+                    client.publish(f"{TOPIC_TEAM_PREFIX}/SCD41/temperature", str(temperature), qos=1)
 
-                client.publish(f"{TOPIC_INDIVIDUAL_PREFIX}/SCD41/co2", str(co2), qos=1)
-                client.publish(f"{TOPIC_INDIVIDUAL_PREFIX}/SCD41/humidity", str(humidity), qos=1)
-                client.publish(f"{TOPIC_INDIVIDUAL_PREFIX}/SCD41/temperature", str(temperature), qos=1)
+                    client.publish(f"{TOPIC_INDIVIDUAL_PREFIX}/SCD41/co2", str(co2), qos=1)
+                    client.publish(f"{TOPIC_INDIVIDUAL_PREFIX}/SCD41/humidity", str(humidity), qos=1)
+                    client.publish(f"{TOPIC_INDIVIDUAL_PREFIX}/SCD41/temperature", str(temperature), qos=1)
 
-                print(f"SCD41: CO2: {co2} ppm, Humidity: {humidity} %, Temperature: {temperature} °C")
+                    print(f"SCD41: CO2: {co2} ppm, Humidity: {humidity} %, Temperature: {temperature} °C")
+                except OSError:
+                    reset()
+
         else:
             print("SCD41: no new data available")
 
@@ -234,13 +240,16 @@ def compute(coef, raw_temp, raw_press):
     temperature = T / 10
     pressure = p / 100
 
-    client.publish(f"{TOPIC_TEAM_PREFIX}/BMP180/temperature", str(temperature), qos=1)
-    client.publish(f"{TOPIC_TEAM_PREFIX}/BMP180/air_pressure", str(pressure), qos=1)
+    try:
+        client.publish(f"{TOPIC_TEAM_PREFIX}/BMP180/temperature", str(temperature), qos=1)
+        client.publish(f"{TOPIC_TEAM_PREFIX}/BMP180/air_pressure", str(pressure), qos=1)
 
-    client.publish(f"{TOPIC_INDIVIDUAL_PREFIX}/BMP180/temperature", str(temperature), qos=1)
-    client.publish(f"{TOPIC_INDIVIDUAL_PREFIX}/BMP180/air_pressure", str(pressure), qos=1)
+        client.publish(f"{TOPIC_INDIVIDUAL_PREFIX}/BMP180/temperature", str(temperature), qos=1)
+        client.publish(f"{TOPIC_INDIVIDUAL_PREFIX}/BMP180/air_pressure", str(pressure), qos=1)
 
-    print(f"BMP180: Temperature: {temperature} °C, Pressure: {pressure} hPa")
+        print(f"BMP180: Temperature: {temperature} °C, Pressure: {pressure} hPa")
+    except OSError:
+        reset()
 
 bmp180_read_chip_id(i2c)
 coef = bmp180_read_coefficients(i2c)

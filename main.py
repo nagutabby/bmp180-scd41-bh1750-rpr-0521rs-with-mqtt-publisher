@@ -16,6 +16,7 @@ SERVER = config.SERVER_MQTT_BROKER
 TOPIC_TEAM_PREFIX = "i483/sensors/team2"
 TOPIC_INDIVIDUAL_PREFIX = "i483/sensors/s2410064"
 
+RPR_I2C_ADDRESS = 0x38
 BH1750_I2C_ADDRESS = 0x23
 SCD41_I2C_ADDRESS = 0x62
 BMP180_I2C_ADDRESS = 0x77
@@ -44,6 +45,9 @@ client.connect()
 print(f"Connected to MQTT Broker {SERVER}")
 
 def main():
+    rpr_system_control()
+    rpr_mode_control()
+    rpr_als_control()
     scd41_stop_periodic_measurement()
     time.sleep(1)
     scd41_start_periodic_measurement()
@@ -55,6 +59,10 @@ def main():
         for i in range(15, 0, -1):
             print(i)
             time.sleep(1)
+
+        read_als_data()
+        read_als_data_ambient()
+
         read_buffer = bytearray(2)
         i2c.readfrom_into(BH1750_I2C_ADDRESS, read_buffer, len(read_buffer))
 
@@ -257,5 +265,34 @@ coef = bmp180_read_coefficients(i2c)
 def set_continuous_high_res_mode():
     write_buffer = bytearray([0x10])
     i2c.writeto(BH1750_I2C_ADDRESS, write_buffer)
+
+def rpr_system_control():
+    i2c.writeto(RPR_I2C_ADDRESS, bytes([0x40, 0x80]))
+
+def rpr_mode_control():
+    i2c.writeto(RPR_I2C_ADDRESS, bytes([0x41, 0x8a]))
+
+def rpr_als_control():
+    i2c.writeto(RPR_I2C_ADDRESS, bytes([0x42, 0x00]))
+
+def read_als_data():
+    i2c.writeto(RPR_I2C_ADDRESS, bytes([0x46]))
+    data = i2c.readfrom(RPR_I2C_ADDRESS, 2)
+    als_value = (data[1] << 8) | data[0]
+    try:
+        client.publish(f"{TOPIC_TEAM_PREFIX}/RPR0521RS/illumination", str(als_value), qos=1)
+        print(f"RPR-0521RS: Illumination: {als_value} lx")
+    except OSError:
+        reset()
+
+def read_als_data_ambient():
+    i2c.writeto(RPR_I2C_ADDRESS, bytes([0x48]))
+    data = i2c.readfrom(RPR_I2C_ADDRESS, 2)
+    als_value_ambient = (data[1] << 8) | data[0]
+    try:
+        client.publish(f"{TOPIC_TEAM_PREFIX}/RPR0521RS/ambient_illumination", str(als_value_ambient), qos=1)
+        print(f"RPR-0521RS: Ambient illumination: {als_value_ambient} lx")
+    except OSError:
+        reset()
 
 main()
